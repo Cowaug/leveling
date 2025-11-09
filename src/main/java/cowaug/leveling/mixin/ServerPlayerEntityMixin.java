@@ -31,12 +31,14 @@ public abstract class ServerPlayerEntityMixin extends PlayerEntity {
 
     @Inject(method = "playerTick", at = @At("HEAD"))
     public void onPlayerTickModifyStats(CallbackInfo ci) {
-        modifyPlayerStats(EntityAttributes.MAX_HEALTH, Identifier.of("healthScale"), -10, 1, 1, -5, EntityAttributeModifier.Operation.ADD_VALUE);
-        modifyPlayerStats(EntityAttributes.ARMOR, Identifier.of("armorScale"), 0, 1, 2, -30, EntityAttributeModifier.Operation.ADD_VALUE);
-        modifyPlayerStats(EntityAttributes.OXYGEN_BONUS, Identifier.of("oxygenScale"), 0, 0.1f, 2, -10, EntityAttributeModifier.Operation.ADD_VALUE); // https://minecraft.wiki/w/Attribute#Oxygen_bonus
+        modifyPlayerStats(EntityAttributes.MAX_HEALTH, Identifier.of("scale_hp"), -10, 20, 5, 100, EntityAttributeModifier.Operation.ADD_VALUE, true);
+        modifyPlayerStats(EntityAttributes.OXYGEN_BONUS, Identifier.of("scale_oxygen_decrease_rate"), 0, 1, 30, 100, EntityAttributeModifier.Operation.ADD_VALUE, false); // https://minecraft.wiki/w/Attribute#Oxygen_bonus
 
-        modifyPlayerStats(EntityAttributes.MOVEMENT_SPEED, Identifier.of("speedScale"), 0, 1, 2, -20, EntityAttributeModifier.Operation.ADD_MULTIPLIED_BASE);
-        modifyPlayerStats(EntityAttributes.SUBMERGED_MINING_SPEED, Identifier.of("waterMiningScale"), 0, 1, 2, -20, EntityAttributeModifier.Operation.ADD_MULTIPLIED_BASE);
+        modifyPlayerStats(EntityAttributes.MOVEMENT_SPEED, Identifier.of("scale_speed"), 0, 0.1f, 10, 100, EntityAttributeModifier.Operation.ADD_MULTIPLIED_BASE, false);
+        modifyPlayerStats(EntityAttributes.WATER_MOVEMENT_EFFICIENCY, Identifier.of("scale_water_speed"), 0, 0.1f, 10, 100, EntityAttributeModifier.Operation.ADD_MULTIPLIED_BASE, false);
+
+        modifyPlayerStats(EntityAttributes.MINING_EFFICIENCY, Identifier.of("scale_mining_efficiency"), 0, 0.1f, 20, 50, EntityAttributeModifier.Operation.ADD_MULTIPLIED_BASE, false);
+        modifyPlayerStats(EntityAttributes.SUBMERGED_MINING_SPEED, Identifier.of("scale_water_mining_speed"), 0, 0.1f, 20, 50, EntityAttributeModifier.Operation.ADD_MULTIPLIED_BASE, false);
     }
 
     @Redirect(method = "onDeath", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/network/ServerPlayerEntity;drop(Lnet/minecraft/server/world/ServerWorld;Lnet/minecraft/entity/damage/DamageSource;)V"))
@@ -51,16 +53,23 @@ public abstract class ServerPlayerEntityMixin extends PlayerEntity {
         if (!alive) {
             // only keep inventory
             this.getInventory().clone(oldPlayer.getInventory());
-            this.hungerManager.setFoodLevel(0);
+            this.hungerManager.setFoodLevel(4);
         }
     }
 
     @Unique
-    private void modifyPlayerStats(RegistryEntry<EntityAttribute> attribute, Identifier id, float initValue, float increaseValue, int levelPerModify, int levelOffset, EntityAttributeModifier.Operation operation) {
+    private void modifyPlayerStats(RegistryEntry<EntityAttribute> attribute, Identifier id, float startValue, float endValue, int startLevel, int endLevel, EntityAttributeModifier.Operation operation, boolean roundToEven) {
         var shouldUpdateStats = false;
-        EntityAttributeInstance attributeInstance = Objects.requireNonNull(this.getAttributeInstance(attribute));
-        var newValue = initValue + Math.max(0, (int) ((this.experienceLevel + levelOffset) / levelPerModify));
+        var valuePerStep = (endValue - startValue) / (endLevel - startLevel);
 
+        var newValue = startValue + valuePerStep * Math.max(0, this.experienceLevel - startLevel + 1);
+        newValue = Math.min(newValue, endValue);
+
+        if (roundToEven) {
+            newValue = Math.round(newValue / 2) * 2;
+        }
+
+        EntityAttributeInstance attributeInstance = Objects.requireNonNull(this.getAttributeInstance(attribute));
         if (attributeInstance.hasModifier(id)) {
             var modifier = Objects.requireNonNull(attributeInstance.getModifier(id));
             var oldValue = modifier.value();
