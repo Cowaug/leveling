@@ -2,7 +2,7 @@
 	"schemaVersion": 1,
 	"id": "leveling",
 	"version": "${version}",
-	"name": "Leveling",
+	"name": "leveling",
 	"description": "This is an example description! Tell everyone what your mod is about!",
 	"authors": [
 		"Me!"
